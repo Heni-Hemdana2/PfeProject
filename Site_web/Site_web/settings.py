@@ -32,8 +32,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'django.contrib.gis',
-    
+    'django.contrib.gis',  
     'Authentication',
     'Client',
     'Public_App',
@@ -41,8 +40,8 @@ INSTALLED_APPS = [
     'REST_API',
     'rest_framework',
     'rest_framework.authtoken',
-
     'corsheaders',
+    'channels',
 ]
 
 MIDDLEWARE = [
@@ -78,6 +77,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'Site_web.wsgi.application'
+ASGI_APPLICATION = 'Site_web.asgi.application'
 
 #l'internationalisation
 # Database
