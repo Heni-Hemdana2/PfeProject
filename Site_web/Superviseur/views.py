@@ -577,3 +577,5 @@ def video_feed(request, cam_name):
         return HttpResponseBadRequest("Camera not found.")
     except Exception as e:
         return HttpResponseBadRequest(f"Error: {str(e)}")
+
+#daphne Site_web.asgi:application

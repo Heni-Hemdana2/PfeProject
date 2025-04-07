@@ -1,1 +1,1 @@
-{"columns":["x_min","y_min","x_max","y_max","confidence","class_id","class_name","camera_name"],"index":[],"data":[]}
+{"columns":["x_min","y_min","x_max","y_max","confidence","class_id","class_name","camera_name"],"index":[0],"data":[[57.6,0.0,630.2,480.0,0.5700730681,1,"smoke","cameraderahim"]]}
