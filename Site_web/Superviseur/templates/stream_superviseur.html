@@ -264,137 +264,145 @@
         };
     };
 
-    // Modifions la fonction addStream pour supporter l'affichage d'images à intervalles
-    function addStream() {
-        const clientName = document.getElementById('clientSelect').value;
-        if (!clientName) {
-            alert("électionnez un client, s'il vous plaît !");
-            return;
-        }
+// Modifiez la fonction addStream dans votre page HTML
+function addStream() {
+    const clientName = document.getElementById('clientSelect').value;
+    if (!clientName) {
+        alert("Sélectionnez un projet, s'il vous plaît !");
+        return;
+    }
 
-        const projectName = document.getElementById('projectSelect').value;
-        if (!projectName) {
-            alert("électionnez un client, s'il vous plaît !");
-            return;
-        }
+    const projectName = document.getElementById('projectSelect').value;
+    if (!projectName) {
+        alert("Sélectionnez un projet, s'il vous plaît !");
+        return;
+    }
 
-        // Récupérer les caméras du projet sélectionné
-        fetch(`/api/cameras/${encodeURIComponent(projectName)}/`)
-            .then(response => response.json())
-            .then(data => {
-                if (data && data.length > 0) {
-                    const container = document.getElementById('streamsContainer');
-                    const streamsSection = document.getElementById('streamsSection');
-                    const tableSection = document.getElementById('tableSection');
-                    const tableBody = tableSection.querySelector('table tbody');
+    // Récupérer les caméras pour le projet sélectionné
+    fetch(`/api/cameras/${encodeURIComponent(projectName)}/`)
+        .then(response => response.json())
+        .then(data => {
+            if (data && data.length > 0) {
+                const container = document.getElementById('streamsContainer');
+                const streamsSection = document.getElementById('streamsSection');
+                const tableSection = document.getElementById('tableSection');
+                const tableBody = tableSection.querySelector('table tbody');
 
-                    // Nettoyer les flux et lignes de tableau existants
-                    container.innerHTML = '';
-                    tableBody.innerHTML = '';
+                // Nettoyer les flux existants et les lignes du tableau
+                container.innerHTML = '';
+                tableBody.innerHTML = '';
 
-                    const primaryStreamContainer = document.createElement('div');
-                    primaryStreamContainer.id = 'primaryStream';
-                    const smallStreamsContainer = document.createElement('div');
-                    smallStreamsContainer.id = 'smallStreams';
+                const primaryStreamContainer = document.createElement('div');
+                primaryStreamContainer.id = 'primaryStream';
+                const smallStreamsContainer = document.createElement('div');
+                smallStreamsContainer.id = 'smallStreams';
 
-                    // Pour chaque caméra
-                    data.forEach((cam, index) => {
-                        // Créer un élément d'image pour afficher les dernières images
-                        const img = document.createElement('img');
-                        img.classList.add("img-fluid");
-                        img.style.cssText = "border: 1px solid #008000; border-radius: 10px; margin-top: 2px;";
-                        
-                        // Cette URL doit pointer vers votre nouvelle API d'images
-                        img.src = `/api/camera/${encodeURIComponent(cam.name_cam)}/latest/?t=${new Date().getTime()}`;
-                        
-                        // Configuration pour actualiser l'image régulièrement
-                        img.dataset.camName = cam.name_cam;
-                        
-                        // Ajouter les informations de la caméra au tableau
-                        const row = tableBody.insertRow();
-                        const cell1 = row.insertCell(0);
-                        const cell2 = row.insertCell(1);
-                        cell1.textContent = cam.name_cam;
-                        cell2.textContent = cam.adresse_cam ? cam.adresse_cam : "Caméra Distant";
-
-                        // Taille standard
+                // Pour chaque caméra trouvée
+                data.forEach((cam, index) => {
+                    // Créer l'élément image
+                    const img = document.createElement('img');
+                    img.classList.add("img-fluid");
+                    img.style.cssText = "border: 1px solid #008000; border-radius: 10px; margin-top: 2px;";
+                    img.dataset.camName = cam.name_cam;
+                    
+                    // Ajouter la caméra au tableau
+                    const row = tableBody.insertRow();
+                    const cell1 = row.insertCell(0);
+                    const cell2 = row.insertCell(1);
+                    cell1.textContent = cam.name_cam;
+                    cell2.textContent = cam.adresse_cam ? cam.adresse_cam : "Caméra Distant";
+                    
+                    // Configurer la taille et la position
+                    if (index === 0) {
+                        // Stream principal
                         img.width = 720;
                         img.height = 480;
-                        
-                        if (index === 0) {
-                            primaryStreamContainer.appendChild(img);
-                        } else {
-                            img.setAttribute('data-index', index);
-                            img.style.cursor = 'pointer';
-                            img.onclick = () => swapStreams(img);
-                            img.width = 250;  // Petite taille pour les streams secondaires
-                            img.height = 150;
-                            smallStreamsContainer.appendChild(img);
-                        }
-                        
-                        // Mettre en place l'actualisation périodique des images
-                        startImageRefresh(img);
-                    });
+                        primaryStreamContainer.appendChild(img);
+                    } else {
+                        // Streams secondaires
+                        img.width = 250;
+                        img.height = 150;
+                        img.setAttribute('data-index', index);
+                        img.style.cursor = 'pointer';
+                        img.onclick = () => swapStreams(img);
+                        smallStreamsContainer.appendChild(img);
+                    }
+                    
+                    // Mettre en place l'actualisation périodique
+                    startImageRefresh(img);
+                });
+                
+                // Ajouter les conteneurs au DOM
+                container.appendChild(primaryStreamContainer);
+                container.appendChild(smallStreamsContainer);
+                
+                // Afficher les sections
+                streamsSection.style.display = 'block';
+                tableSection.style.display = 'block';
+            } else {
+                alert('Aucune caméra trouvée pour ce projet.');
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching the cameras:', error);
+            alert('Erreur lors de la récupération des caméras.');
+        });
+}
 
-                    container.appendChild(primaryStreamContainer);
-                    container.appendChild(smallStreamsContainer);
-
-                    streamsSection.style.display = 'block';
-                    tableSection.style.display = 'block';
-                } else {
-                    alert('Aucune caméra trouvée pour ce projet.');
-                }
-            })
-            .catch(error => {
-                console.error('Error fetching the cameras:', error);
-                alert('Erreur lors de la récupération des caméras.');
-            });
+// Fonction pour rafraîchir périodiquement les images
+function startImageRefresh(imgElement) {
+    const camName = imgElement.dataset.camName;
+    
+    // Actualiser immédiatement
+    refreshImage();
+    
+    // Fonction pour actualiser l'image
+    function refreshImage() {
+        // Ajouter un timestamp pour éviter la mise en cache
+        const timestamp = new Date().getTime();
+        imgElement.src = `/api/camera/${encodeURIComponent(camName)}/latest/?t=${timestamp}`;
     }
+    
+    // Définir l'intervalle de rafraîchissement (par exemple, toutes les 2 secondes)
+    const refreshInterval = setInterval(refreshImage, 2000);
+    
+    // Stocker l'intervalle dans l'élément pour pouvoir l'arrêter si nécessaire
+    imgElement.dataset.refreshInterval = refreshInterval;
+}
 
-    // Fonction pour démarrer l'actualisation périodique des images
-    function startImageRefresh(imgElement) {
-        const camName = imgElement.dataset.camName;
-        
-        // Fonction pour actualiser une image
-        function refreshImage() {
-            // Ajouter un timestamp pour éviter la mise en cache
-            imgElement.src = `/api/camera/${encodeURIComponent(camName)}/latest/?t=${new Date().getTime()}`;
-        }
-        
-        // Actualiser toutes les 5 secondes (ou à l'intervalle défini pour vos cartes embarquées)
-        const refreshInterval = setInterval(refreshImage, 5000);
-        
-        // Stocker l'intervalle dans l'élément pour pouvoir l'arrêter si nécessaire
-        imgElement.dataset.refreshInterval = refreshInterval;
-        
-        // Première actualisation
-        refreshImage();
+// Fonction pour échanger les flux
+function swapStreams(smallStreamImg) {
+    const primaryStreamDiv = document.getElementById('primaryStream');
+    const primaryStreamImg = primaryStreamDiv.querySelector('img');
+    
+    // Arrêter les intervalles existants
+    if (primaryStreamImg.dataset.refreshInterval) {
+        clearInterval(parseInt(primaryStreamImg.dataset.refreshInterval));
     }
+    if (smallStreamImg.dataset.refreshInterval) {
+        clearInterval(parseInt(smallStreamImg.dataset.refreshInterval));
+    }
+    
+    // Échanger les attributs
+    const tempSrc = primaryStreamImg.src;
+    const tempCamName = primaryStreamImg.dataset.camName;
+    
+    primaryStreamImg.src = smallStreamImg.src;
+    primaryStreamImg.dataset.camName = smallStreamImg.dataset.camName;
+    
+    smallStreamImg.src = tempSrc;
+    smallStreamImg.dataset.camName = tempCamName;
+    
+    // Redémarrer les intervalles
+    startImageRefresh(primaryStreamImg);
+    startImageRefresh(smallStreamImg);
+}
 
-    // La fonction swapStreams reste essentiellement la même mais doit gérer les intervalles
-    function swapStreams(smallStreamImg) {
-        const primaryStreamDiv = document.getElementById('primaryStream');
-        const primaryStreamImg = primaryStreamDiv.querySelector('img');
-        
-        // Échanger les sources
-        const tempSrc = primaryStreamImg.src;
-        const tempCamName = primaryStreamImg.dataset.camName;
-        
-        // Mettre à jour le stream principal
-        primaryStreamImg.src = smallStreamImg.src;
-        primaryStreamImg.dataset.camName = smallStreamImg.dataset.camName;
-        
-        // Mettre à jour le petit stream
-        smallStreamImg.src = tempSrc;
-        smallStreamImg.dataset.camName = tempCamName;
-        
-        // Réinitialiser les intervalles de rafraîchissement
-        clearInterval(primaryStreamImg.dataset.refreshInterval);
-        clearInterval(smallStreamImg.dataset.refreshInterval);
-        
-        startImageRefresh(primaryStreamImg);
-        startImageRefresh(smallStreamImg);
-    }
+function refreshImage() {
+    const timestamp = new Date().getTime();
+    console.log(`Rafraîchissement de l'image pour ${camName} à ${timestamp}`);
+    imgElement.src = `/api/camera/${encodeURIComponent(camName)}/latest/?t=${timestamp}`;
+}
 </script>
 
 
