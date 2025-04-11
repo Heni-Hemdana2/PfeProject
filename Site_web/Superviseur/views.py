@@ -436,7 +436,7 @@ def process_image(image_data, cam_name):
             
             # Nommer et sauvegarder l'image
             timestamp = datetime.now().strftime("%H_%M_%S")
-            filename = f"{timestamp}_{cam_name}.jpg"
+            filename = f"{timestamp}_{cam_name}.jpeg"
             filepath = os.path.join(save_dir, filename)
             cv2.imwrite(filepath, frame_with_boxes)
             
@@ -447,7 +447,7 @@ def process_image(image_data, cam_name):
             ).start()
         
         # Encoder l'image avec les détections pour l'affichage
-        _, jpeg = cv2.imencode('.jpg', res_plotted)
+        _, jpeg = cv2.imencode('.jpeg', res_plotted)
         
         return jpeg.tobytes(), result_df, filepath
     except Exception as e:
@@ -553,14 +553,14 @@ def get_latest_image(request, cam_name):
                     parts = camera_url.replace('rtsp://', '').split('/')
                     if len(parts) > 0:
                         ip_port = parts[0]
-                        camera_url = f"http://{ip_port}/photo.jpg"
+                        camera_url = f"http://{ip_port}"
             else:
                 # Construire l'URL à partir des composants
                 ip = cam.adresse_cam
                 port = cam.num_port if cam.num_port else "8080"  # Port par défaut pour IP Webcam
                 
                 # URL pour une image fixe (adapté à IP Webcam ou d'autres caméras IP)
-                camera_url = f"http://{ip}:{port}/photo.jpg"
+                camera_url = f"http://{ip}:{port}"
             
             print(f"Tentative de récupération depuis l'URL: {camera_url}")
             
@@ -577,7 +577,7 @@ def get_latest_image(request, cam_name):
                     os.makedirs(save_dir)
                 
                 timestamp = datetime.now().strftime("%H_%M_%S")
-                filename = f"{timestamp}_{cam_name}.jpg"
+                filename = f"{timestamp}_{cam_name}.jpeg"
                 filepath = os.path.join(save_dir, filename)
                 
                 with open(filepath, 'wb') as f:
@@ -592,7 +592,7 @@ def get_latest_image(request, cam_name):
                 )
                 
                 # Retourner l'image directement
-                return HttpResponse(response.content, content_type='image/jpeg')
+                return HttpResponse(response.content, content_type='image.jpeg')
         except Exception as e:
             print(f"Erreur lors de la récupération depuis la caméra: {str(e)}")
         
