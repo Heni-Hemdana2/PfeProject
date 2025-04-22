@@ -360,6 +360,8 @@ import os
 import json
 from datetime import datetime
 import threading
+import numpy as np
+import io
 
 # Vérification de la disponibilité d'un GPU
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -367,151 +369,8 @@ print(f'You are now using {device}')
 print('---------------------------')
 
 # Chargement du modèle YOLO pendant le démarrage de l'application
-model = YOLO('Model.pt').to(device)
+model = YOLO('FireShield.pt').to(device)
 
-# Fonction pour extraire les détections d'objets dans un DataFrame Pandas et un format JSON
-def get_pandas(results, cam_name):
-    # Cette fonction reste essentiellement la même
-    # [Garder le code existant de cette fonction]
-    boxes_list = results[0].boxes.data.tolist()
-    columns = ['x_min', 'y_min', 'x_max', 'y_max', 'confidence', 'class_id']
-
-    for i in boxes_list:
-        i[:4] = [round(coord, 1) for coord in i[:4]]
-        i[5] = int(i[5])
-        i.append(results[0].names[i[5]])
-
-    columns.append('class_name')
-    result_df = pd.DataFrame(boxes_list, columns=columns)
-    result_df['camera_name'] = cam_name
-
-    total_objects = sum(len(result.boxes) for result in results)
-
-    result_df.to_json('Results.json', orient='split', compression='infer')
-    result_df_json = pd.read_json('Results.json', orient='split', compression='infer')
-
-    json_data_str = result_df.to_json(orient='split', compression='infer')
-
-    if json_data_str is not None and total_objects != 0:
-        json_data = json.loads(json_data_str)
-        print('----------------------------------------------------------------------------------')
-        print(f"Ce sont les détections pour la caméra '{cam_name}':")
-        print(f'Nombres d\'objets détectés: {total_objects}')
-        print(result_df_json)
-        return result_df, json_data
-    return result_df, {}
-
-# Nouvelle fonction pour traiter une image unique
-def process_image(image_data, cam_name):
-    try:
-        # Décoder l'image depuis les bytes
-        nparr = np.frombuffer(image_data, np.uint8)
-        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        
-        if frame is None:
-            return None, None, "Impossible de décoder l'image"
-        
-        # Prédiction des objets dans l'image
-        results = model.predict(frame, conf=0.4, save=True)
-        res_plotted = results[0].plot()
-        
-        # Extraction des résultats de détection
-        result_df, result_df_json = get_pandas(results, cam_name)
-        
-        # Création d'un répertoire pour sauvegarder les images détectées
-        current_date = datetime.now().strftime("%d_%m_%Y")
-        save_dir = os.path.join("C:\\Users\\Heni\\OneDrive\\Bureau\\sauvegarde", current_date)
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-        
-        # Traitement des détections et sauvegarde
-        filepath = None
-        if not result_df.empty:
-            frame_with_boxes = frame.copy()
-            for index, row in result_df.iterrows():
-                class_name = row['class_name']
-                x_min, y_min, x_max, y_max = int(row['x_min']), int(row['y_min']), int(row['x_max']), int(row['y_max'])
-                cv2.rectangle(frame_with_boxes, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
-                cv2.putText(frame_with_boxes, class_name, (x_min, y_min - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-            
-            # Nommer et sauvegarder l'image
-            timestamp = datetime.now().strftime("%H_%M_%S")
-            filename = f"{timestamp}_{cam_name}.jpg"
-            filepath = os.path.join(save_dir, filename)
-            cv2.imwrite(filepath, frame_with_boxes)
-            
-            # Sauvegarder les résultats dans un thread séparé
-            threading.Thread(
-                target=save_detection_results,
-                args=(cam_name, filepath, result_df_json)
-            ).start()
-        
-        # Encoder l'image avec les détections pour l'affichage
-        _, jpeg = cv2.imencode('.jpg', res_plotted)
-        
-        return jpeg.tobytes(), result_df, filepath
-    except Exception as e:
-        print(f"Erreur lors du traitement de l'image: {str(e)}")
-        return None, None, str(e)
-
-# Fonction extraite pour sauvegarder les résultats en DB
-def save_detection_results(cam_name, filepath, detection_data):
-    try:
-        camera_instance = Cam.objects.get(name_cam=cam_name)
-        project_instance = camera_instance.name_project
-        client_instance = project_instance.pseudo
-
-        detection_result_instance = DetectionResult(
-            camera_name=camera_instance,
-            path_to_image=filepath,
-            detection_data=detection_data,
-            user=client_instance,
-        )
-        detection_result_instance.save()
-    except Exception as e:
-        print(f"Erreur lors de la sauvegarde des résultats : {e}")
-
-# Vue pour recevoir des images à intervalle régulier
-@csrf_exempt
-def receive_image(request, cam_name):
-    if request.method != 'POST':
-        return JsonResponse({'error': 'Méthode non autorisée'}, status=405)
-    
-    try:
-        # Vérifier si la caméra existe dans la base de données
-        cam = Cam.objects.get(name_cam=cam_name)
-        
-        # Récupérer l'image depuis la requête
-        if 'image' not in request.FILES:
-            return JsonResponse({'error': 'Aucune image fournie'}, status=400)
-        
-        image_file = request.FILES['image']
-        image_data = image_file.read()
-        
-        # Traiter l'image
-        processed_image, detections, filepath = process_image(image_data, cam_name)
-        
-        if processed_image is None:
-            return JsonResponse({'error': f'Erreur de traitement: {filepath}'}, status=500)
-        
-        # Stocker l'image traitée pour l'affichage dans le dashboard
-        # (Vous pouvez utiliser une structure de données en mémoire ou une base de données)
-        cache_key = f"latest_image_{cam_name}"
-        # Vous pouvez utiliser Django cache, Redis, ou une autre solution selon votre besoin
-        
-        response_data = {
-            'status': 'success',
-            'message': 'Image traitée avec succès',
-            'detections_count': len(detections) if detections is not None else 0,
-            'filepath': filepath
-        }
-        
-        return JsonResponse(response_data)
-        
-    except Cam.DoesNotExist:
-        return JsonResponse({'error': 'Caméra non trouvée'}, status=404)
-    except Exception as e:
-        return JsonResponse({'error': f'Erreur: {str(e)}'}, status=500)
 
 def get_latest_image(request, cam_name):
     try:
@@ -524,6 +383,7 @@ def get_latest_image(request, cam_name):
             return JsonResponse({'error': f'Caméra non trouvée: {cam_name}'}, status=404)
         
         # Tenter de récupérer directement depuis la caméra
+        image_content = None
         try:
             # Construire l'URL de la caméra à partir du modèle
             if cam.is_full_rtsp_url and cam.custom_url:
@@ -547,55 +407,114 @@ def get_latest_image(request, cam_name):
             if response.status_code == 200:
                 # Vérifier si c'est bien une image JPEG
                 if response.content[:2] == b'\xff\xd8':  # Signature d'en-tête JPEG
-                    # Préparer le dossier de sauvegarde avec la date actuelle
-                    current_date = datetime.now().strftime("%d_%m_%Y")
-                    save_dir = os.path.join("C:\\Users\\Heni\\OneDrive\\Bureau\\sauvegarde", current_date)
-                    if not os.path.exists(save_dir):
-                        os.makedirs(save_dir)
-                    
-                    # Créer un nom de fichier unique avec horodatage
-                    timestamp = datetime.now().strftime("%H_%M_%S")
-                    filename = f"{timestamp}_{cam_name}.jpg"
-                    filepath = os.path.join(save_dir, filename)
-                    
-                    # Sauvegarder l'image comme nouvelle entrée
-                    with open(filepath, 'wb') as f:
-                        f.write(response.content)
-                    
-                    # Créer une nouvelle entrée dans la base de données
-                    detection_result = DetectionResult.objects.create(
-                        camera_name=cam,
-                        path_to_image=filepath,
-                        detection_data={},
-                        user=cam.name_project.pseudo
-                    )
-                    
-                    # Retourner l'image directement
-                    return HttpResponse(response.content, content_type='image/jpeg')
-                else:
-                    print("Le contenu reçu n'est pas une image JPEG valide")
+                    image_content = response.content
         except Exception as e:
             print(f"Erreur lors de la récupération depuis la caméra: {str(e)}")
         
         # Si la récupération directe échoue, récupérer la dernière image enregistrée
-        try:
-            latest_detection = DetectionResult.objects.filter(
-                camera_name__name_cam=cam_name
-            ).order_by('-detected_at').first()
-            
-            if latest_detection and hasattr(latest_detection, 'path_to_image'):
-                filepath = latest_detection.path_to_image
-                if os.path.exists(filepath):
-                    with open(filepath, 'rb') as f:
-                        return HttpResponse(f.read(), content_type='image/jpeg')
-        except Exception as e:
-            print(f"Erreur lors de la récupération de la détection: {str(e)}")
+        if image_content is None:
+            try:
+                latest_detection = DetectionResult.objects.filter(
+                    camera_name__name_cam=cam_name
+                ).order_by('-detected_at').first()
+                
+                if latest_detection and hasattr(latest_detection, 'path_to_image'):
+                    filepath = latest_detection.path_to_image
+                    if os.path.exists(filepath):
+                        with open(filepath, 'rb') as f:
+                            image_content = f.read()
+            except Exception as e:
+                print(f"Erreur lors de la récupération de la détection: {str(e)}")
         
         # Si aucune image n'est disponible, utiliser l'image par défaut
-        default_image_path = r"C:\Users\Heni\OneDrive\Bureau\pfeproject\Site_web\profile_pics\téléchargement.png"
-        if os.path.exists(default_image_path):
-            with open(default_image_path, 'rb') as f:
-                return HttpResponse(f.read(), content_type='image/png')  # Notez image/png si c'est un PNG
+        if image_content is None:
+            default_image_path = r"C:\Users\Heni\OneDrive\Bureau\pfeproject\Site_web\profile_pics\téléchargement.png"
+            if os.path.exists(default_image_path):
+                with open(default_image_path, 'rb') as f:
+                    image_content = f.read()
+            else:
+                return HttpResponse(status=204)  # No Content
+        
+        # Si nous avons récupéré une image, l'analyser avec YOLO
+        if image_content:
+            # Convertir l'image en format numpy pour YOLO
+            nparr = np.frombuffer(image_content, np.uint8)
+            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            
+            # Exécuter la détection avec le modèle YOLO
+            results = model(img, conf=0.25)  # Vous pouvez ajuster le seuil de confiance
+            
+            # Préparer le dossier de sauvegarde avec la date actuelle
+            current_date = datetime.now().strftime("%d_%m_%Y")
+            save_dir = os.path.join("C:\\Users\\Heni\\OneDrive\\Bureau\\sauvegarde", current_date)
+            if not os.path.exists(save_dir):
+                os.makedirs(save_dir)
+            
+            # Créer un nom de fichier unique avec horodatage
+            timestamp = datetime.now().strftime("%H_%M_%S")
+            filename = f"{timestamp}_{cam_name}.jpg"
+            filepath = os.path.join(save_dir, filename)
+            
+            # Créer un dictionnaire pour stocker les résultats de détection
+            detection_data = {}
+            
+            # Dessiner les boîtes de détection sur l'image
+            for i, result in enumerate(results):
+                boxes = result.boxes.cpu().numpy()
+                if len(boxes) > 0:
+                    img_with_boxes = img.copy()
+                    detection_items = []
+                    
+                    for j, box in enumerate(boxes):
+                        # Extraire les informations de la boîte
+                        x1, y1, x2, y2 = box.xyxy[0].astype(int)
+                        confidence = float(box.conf[0])
+                        class_id = int(box.cls[0])
+                        class_name = result.names[class_id]
+                        
+                        # Ajouter aux données de détection
+                        detection_items.append({
+                            'id': j,
+                            'class': class_name,
+                            'confidence': confidence,
+                            'box': [int(x1), int(y1), int(x2), int(y2)]
+                        })
+                        
+                        # Dessiner la boîte sur l'image
+                        color = (0, 0, 255)  # Rouge pour le feu
+                        cv2.rectangle(img_with_boxes, (x1, y1), (x2, y2), color, 2)
+                        
+                        # Ajouter le texte d'étiquette
+                        label = f"{class_name}: {confidence:.2f}"
+                        cv2.putText(img_with_boxes, label, (x1, y1-10), 
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                    
+                    # Mettre à jour l'image avec les boîtes
+                    img = img_with_boxes
+                    
+                    # Stocker les résultats de détection
+                    detection_data = {
+                        'total_detections': len(boxes),
+                        'items': detection_items
+                    }
+            
+            # Sauvegarder l'image avec les détections
+            cv2.imwrite(filepath, img)
+            
+            # Créer une nouvelle entrée dans la base de données
+            detection_result = DetectionResult.objects.create(
+                camera_name=cam,
+                path_to_image=filepath,
+                detection_data=detection_data,
+                user=cam.name_project.pseudo
+            )
+            
+            # Convertir l'image traitée en bytes pour la réponse HTTP
+            _, img_encoded = cv2.imencode('.jpg', img)
+            response_content = img_encoded.tobytes()
+            
+            # Retourner l'image traitée
+            return HttpResponse(response_content, content_type='image/jpeg')
                 
         return HttpResponse(status=204)  # No Content
         
@@ -604,3 +523,27 @@ def get_latest_image(request, cam_name):
         print(f"Erreur dans get_latest_image: {str(e)}")
         print(traceback.format_exc())
         return JsonResponse({'error': f'Erreur: {str(e)}'}, status=500)
+
+
+# Fonction facultative pour traiter en arrière-plan
+def process_image_with_yolo(img_path, cam_name, user):
+    """Traite une image avec YOLO en arrière-plan"""
+    try:
+        # Charger l'image
+        img = cv2.imread(img_path)
+        
+        # Exécuter la détection
+        results = model(img, conf=0.25)
+        
+        # Dessiner les boîtes et préparer les données comme ci-dessus
+        detection_data = {}
+        # ... (code similaire à celui ci-dessus)
+        
+        # Mettre à jour l'entrée dans la base de données
+        detection = DetectionResult.objects.filter(path_to_image=img_path).first()
+        if detection:
+            detection.detection_data = detection_data
+            detection.save()
+            
+    except Exception as e:
+        print(f"Erreur lors du traitement en arrière-plan: {str(e)}")
