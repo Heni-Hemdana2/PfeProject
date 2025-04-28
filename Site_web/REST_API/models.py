@@ -1,3 +1,5 @@
-from django.db import models
+from django.db                      import models
 
-# Create your models here.
+class data(models.Model):
+    pseudo   = models.CharField(max_length=30)
+    password    = models.CharField(max_length=128)

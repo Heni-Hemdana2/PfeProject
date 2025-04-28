@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import datetime
 
 #appel de osgeo pour GDAL
 if os.name == 'nt':
@@ -21,8 +22,25 @@ SECRET_KEY = 'django-insecure-3acj&oh@a9^bv-veeap2de8zmbmvkg$x&@og!t2_8$4k$_$w3e
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost','127.0.0.1', '89.168.56.171','192.168.1.103']
+ALLOWED_HOSTS = ['*']
+CORS_ALLOW_ALL_ORIGINS = True
 
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.BasicAuthentication',
+        'rest_framework_simplejwt.authentication.JWTAuthentication',  # Si vous utilisez djangorestframework-simplejwt
+    ],
+
+    'DEFAULT_PERMISSION_CLASSES': [
+
+    ]
+}
+
+JWT_AUTH={
+    'JWT_EXPIRATION_DELTA': datetime.timedelta(days=3),
+    'JWT_ALLOW_REFRECH':True, 
+}
 
 # Application definition
 INSTALLED_APPS = [
@@ -40,6 +58,7 @@ INSTALLED_APPS = [
     'REST_API',
     'rest_framework',
     'rest_framework.authtoken',
+    'rest_framework_simplejwt',
     'corsheaders',
     'channels',
 ]
@@ -79,6 +98,19 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'Site_web.wsgi.application'
 ASGI_APPLICATION = 'Site_web.asgi.application'
+
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+        # Pour la production, utilisez Redis :
+        # 'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        # 'CONFIG': {
+        #     "hosts": [('127.0.0.1', 6379)],
+        # },
+    },
+}
+
 
 #l'internationalisation
 # Database
