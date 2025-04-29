@@ -1,5 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
+from Superviseur.models import DetectionResult
+import os
 
 class LoginSerializer(serializers.Serializer):
     # Définition des champs de saisie pour les informations de connexion
@@ -30,3 +32,22 @@ class LoginSerializer(serializers.Serializer):
 
         # Retourner les données validées
         return attrs
+    pass
+
+class DetectionImageSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+    detection_time = serializers.DateTimeField(source='detected_at', read_only=True)
+    camera_name = serializers.CharField(source='camera_name.name_cam', read_only=True)
+    
+    class Meta:
+        model = DetectionResult
+        fields = ['id', 'camera_name', 'detection_time', 'image_url', 'detection_data']
+    
+    def get_image_url(self, obj):
+        request = self.context.get('request')
+        if obj.path_to_image and os.path.exists(obj.path_to_image):
+            # Convertir le chemin absolu en URL relative
+            # On suppose que MEDIA_URL est configuré correctement dans settings.py
+            media_path = obj.path_to_image.split('media/')[-1] if 'media/' in obj.path_to_image else obj.path_to_image
+            return request.build_absolute_uri(f'/media/{media_path}')
+        return None

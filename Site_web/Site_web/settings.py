@@ -42,6 +42,11 @@ JWT_AUTH={
     'JWT_ALLOW_REFRECH':True, 
 }
 
+
+# settings.py
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
 # Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
